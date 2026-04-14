@@ -1,29 +1,34 @@
 #!/bin/bash
 
+set -e  # stop on error
+
 echo "🚀 Starting RunPod Auto Setup..."
 
 cd /workspace
 
 # ==============================
-# 1. BASIC SETUP
+# 1. SYSTEM SETUP
 # ==============================
 
-apt-get update && apt-get install -y git wget python3-pip
+echo "📦 Installing system dependencies..."
+apt-get update && apt-get install -y git wget curl python3-pip
 
-# Check HF token
+# ==============================
+# 2. CHECK HF TOKEN
+# ==============================
+
 if [ -z "$HF_TOKEN" ]; then
   echo "❌ ERROR: HF_TOKEN not set!"
   exit 1
 fi
 
-# HuggingFace login
+echo "🔐 Logging into HuggingFace..."
+
 mkdir -p /root/.huggingface
 echo "{\"token\":\"$HF_TOKEN\"}" > /root/.huggingface/token
 
-echo "✅ HuggingFace login configured"
-
 # ==============================
-# 2. INSTALL COMFYUI
+# 3. INSTALL COMFYUI
 # ==============================
 
 if [ ! -d "ComfyUI" ]; then
@@ -33,72 +38,62 @@ fi
 
 cd ComfyUI
 
-# Install requirements
-echo "📦 Installing Python dependencies..."
+echo "📦 Installing Python requirements..."
 pip install --upgrade pip
 pip install -r requirements.txt
 
 # ==============================
-# 3. INSTALL CUSTOM NODES (IMPORTANT)
+# 4. INSTALL CUSTOM NODES
 # ==============================
 
 cd custom_nodes
 
-# Manager (very useful)
-if [ ! -d "ComfyUI-Manager" ]; then
-  git clone https://github.com/ltdrdata/ComfyUI-Manager.git
-fi
+echo "📦 Installing custom nodes..."
 
-# Impact Pack (image tools)
-if [ ! -d "ComfyUI-Impact-Pack" ]; then
-  git clone https://github.com/ltdrdata/ComfyUI-Impact-Pack.git
-fi
-
-# WAS Node Suite (extra utilities)
-if [ ! -d "was-node-suite-comfyui" ]; then
-  git clone https://github.com/WASasquatch/was-node-suite-comfyui.git
-fi
+git clone https://github.com/ltdrdata/ComfyUI-Manager.git || true
+git clone https://github.com/ltdrdata/ComfyUI-Impact-Pack.git || true
+git clone https://github.com/WASasquatch/was-node-suite-comfyui.git || true
 
 cd ..
 
-# Install node dependencies
-echo "📦 Installing custom node dependencies..."
+echo "📦 Installing node dependencies..."
 pip install -r custom_nodes/ComfyUI-Manager/requirements.txt || true
 pip install -r custom_nodes/was-node-suite-comfyui/requirements.txt || true
 
 # ==============================
-# 4. DOWNLOAD MODELS
+# 5. MODEL DOWNLOAD
 # ==============================
 
 mkdir -p models/checkpoints
 mkdir -p models/vae
-mkdir -p models/clip
 
 MODEL_PATH="models/checkpoints/sdxl.safetensors"
 
 if [ ! -f "$MODEL_PATH" ]; then
   echo "⬇️ Downloading SDXL model..."
 
-  wget --header="Authorization: Bearer $HF_TOKEN" \
+  wget --progress=bar:force \
+  --header="Authorization: Bearer $HF_TOKEN" \
   https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors \
   -O $MODEL_PATH
 fi
 
-# Optional: VAE (better quality)
+# VAE (optional but recommended)
 VAE_PATH="models/vae/sdxl_vae.safetensors"
 
 if [ ! -f "$VAE_PATH" ]; then
   echo "⬇️ Downloading VAE..."
 
-  wget --header="Authorization: Bearer $HF_TOKEN" \
+  wget --progress=bar:force \
+  --header="Authorization: Bearer $HF_TOKEN" \
   https://huggingface.co/stabilityai/sdxl-vae/resolve/main/sdxl_vae.safetensors \
   -O $VAE_PATH
 fi
 
 # ==============================
-# 5. START SERVER
+# 6. START SERVER
 # ==============================
 
-echo "🚀 Starting ComfyUI API Server..."
+echo "🚀 Starting ComfyUI..."
 
 python main.py --listen 0.0.0.0 --port 8188
